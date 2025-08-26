@@ -1,0 +1,3793 @@
+// lib/presentation/widgets/transfer_status.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/i18n/i18n_service.dart';
+import '../../core/models/transfer_job.dart';
+import '../../core/services/transfer_service.dart';
+
+class TransferStatus extends ConsumerWidget {
+  const TransferStatus({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // TODO: Get real active transfers from TransferService
+    // For now, showing mock transfer for demo
+    final hasActiveTransfer = true;
+    
+    if (!hasActiveTransfer) {
+      return const SizedBox.shrink();
+    }
+
+    final mockJob = TransferJob(
+      jobId: 'demo_job',
+      deviceId: 'mock_device',
+      contentId: 'content_1',
+      jobType: TransferJobType.upload,
+      status: TransferJobStatus.running,
+      progress: 0.65,
+      completedChunks: 13,
+      totalChunks: 20,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'transfer.active_transfers'.t,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        // TODO: Replace with StreamBuilder for real transfers
+        // StreamBuilder<TransferJob>(
+        //   stream: TransferService.instance.getJobStream(jobId),
+        //   builder: (context, snapshot) {
+        //     if (!snapshot.hasData) return SizedBox.shrink();
+        //     return _TransferJobCard(job: snapshot.data!);
+        //   },
+        // ),
+        _TransferJobCard(job: mockJob),
+      ],
+    );
+  }
+}
+
+class _TransferJobCard extends StatelessWidget {
+  final TransferJob job;
+
+  const _TransferJobCard({required this.job});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  _getJobIcon(job.jobType),
+                  color: _getStatusColor(job.status),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _getJobTitle(job.jobType),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${(job.progress * 100).toInt()}%',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: _getStatusColor(job.status),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            LinearProgressIndicator(
+              value: job.progress,
+              backgroundColor: Colors.grey[300],
+              valueColor: AlwaysStoppedAnimation<Color>(_getStatusColor(job.status)),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'transfer.chunks_progress'.tr({
+                    'completed': job.completedChunks.toString(),
+                    'total': job.totalChunks.toString(),
+                  }),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                Row(
+                  children: [
+                    if (job.status == TransferJobStatus.running)
+                      IconButton(
+                        onPressed: () {
+                          // TODO: Implement pause functionality
+                          // TransferService.instance.pauseJob(job.jobId);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('transfer.pause_not_implemented'.t),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.pause, size: 20),
+                        constraints: const BoxConstraints(),
+                        padding: EdgeInsets.zero,
+                        tooltip: 'transfer.pause'.t,
+                      ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: () => _showCancelDialog(context),
+                      icon: const Icon(Icons.close, size: 20),
+                      constraints: const BoxConstraints(),
+                      padding: EdgeInsets.zero,
+                      tooltip: 'transfer.cancel'.t,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCancelDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('transfer.cancel_confirm'.t),
+        content: Text('transfer.cancel_message'.t),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('common.no'.t),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              TransferService.instance.cancelJob(job.jobId);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('transfer.cancelled'.t),
+                  backgroundColor: Colors.orange,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('transfer.cancel'.t),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getJobIcon(TransferJobType type) {
+    switch (type) {
+      case TransferJobType.upload:
+        return Icons.upload;
+      case TransferJobType.download:
+        return Icons.download;
+      case TransferJobType.delete:
+        return Icons.delete;
+    }
+  }
+
+  String _getJobTitle(TransferJobType type) {
+    switch (type) {
+      case TransferJobType.upload:
+        return 'transfer.uploading'.t;
+      case TransferJobType.download:
+        return 'transfer.downloading'.t;
+      case TransferJobType.delete:
+        return 'transfer.deleting'.t;
+    }
+  }
+
+  Color _getStatusColor(TransferJobStatus status) {
+    switch (status) {
+      case TransferJobStatus.running:
+        return Colors.blue;
+      case TransferJobStatus.completed:
+        return Colors.green;
+      case TransferJobStatus.failed:
+        return Colors.red;
+      case TransferJobStatus.cancelled:
+        return Colors.orange;
+      case TransferJobStatus.paused:
+        return Colors.orange;
+      case TransferJobStatus.pending:
+        return Colors.grey;
+    }
+  }
+}
+
+// lib/presentation/widgets/device_scan_item.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+
+class DeviceScanItem extends StatelessWidget {
+  final BluetoothDevice device;
+  final VoidCallback onTap;
+
+  const DeviceScanItem({
+    super.key,
+    required this.device,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: const Icon(
+          Icons.bluetooth,
+          color: Colors.blue,
+          size: 32,
+        ),
+        title: Text(
+          device.platformName.isNotEmpty ? device.platformName : 'Unknown Device',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(device.remoteId.toString()),
+            const SizedBox(height: 4),
+            // Signal strength indicator
+            Row(
+              children: [
+                Icon(Icons.signal_cellular_alt, size: 16, color: Colors.grey[600]),
+                const SizedBox(width: 4),
+                Text('Strong', style: TextStyle(color: Colors.grey[600])),
+              ],
+            ),
+          ],
+        ),
+        trailing: ElevatedButton(
+          onPressed: onTap,
+          child: const Text('Connect'),
+        ),
+      ),
+    );
+  }
+}
+
+// lib/presentation/widgets/content_filter.dart
+import 'package:flutter/material.dart';
+
+import '../../core/i18n/i18n_service.dart';
+import '../../core/models/content.dart';
+
+class ContentFilter extends StatelessWidget {
+  final ContentType? selectedFilter;
+  final ValueChanged<ContentType?> onFilterChanged;
+
+  const ContentFilter({
+    super.key,
+    required this.selectedFilter,
+    required this.onFilterChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 60,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          _FilterChip(
+            label: 'content.all'.t,
+            isSelected: selectedFilter == null,
+            onTap: () => onFilterChanged(null),
+          ),
+          const SizedBox(width: 8),
+          _FilterChip(
+            label: 'content.audio'.t,
+            isSelected: selectedFilter == ContentType.audio,
+            onTap: () => onFilterChanged(ContentType.audio),
+            icon: Icons.audiotrack,
+          ),
+          const SizedBox(width: 8),
+          _FilterChip(
+            label: 'content.video'.t,
+            isSelected: selectedFilter == ContentType.video,
+            onTap: () => onFilterChanged(ContentType.video),
+            icon: Icons.videocam,
+          ),
+          const SizedBox(width: 8),
+          _FilterChip(
+            label: 'content.image'.t,
+            isSelected: selectedFilter == ContentType.image,
+            onTap: () => onFilterChanged(ContentType.image),
+            icon: Icons.image,
+          ),
+          const SizedBox(width: 8),
+          _FilterChip(
+            label: 'content.document'.t,
+            isSelected: selectedFilter == ContentType.document,
+            onTap: () => onFilterChanged(ContentType.document),
+            icon: Icons.description,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FilterChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 16),
+            const SizedBox(width: 4),
+          ],
+          Text(label),
+        ],
+      ),
+      selected: isSelected,
+      onSelected: (_) => onTap(),
+      selectedColor: Theme.of(context).primaryColor.withOpacity(0.2),
+      checkmarkColor: Theme.of(context).primaryColor,
+    );
+  }
+}
+
+// lib/presentation/widgets/content_grid.dart
+import 'package:flutter/material.dart';
+
+import '../../core/models/content.dart';
+import 'content_item.dart';
+
+class ContentGrid extends StatelessWidget {
+  final List<Content> content;
+  final ValueChanged<Content> onContentTap;
+
+  const ContentGrid({
+    super.key,
+    required this.content,
+    required this.onContentTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.8,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: content.length,
+      itemBuilder: (context, index) {
+        final item = content[index];
+        return ContentItem(
+          content: item,
+          onTap: () => onContentTap(item),
+        );
+      },
+    );
+  }
+}
+
+// lib/presentation/widgets/content_item.dart
+import 'package:flutter/material.dart';
+
+import '../../core/models/content.dart';
+
+class ContentItem extends StatelessWidget {
+  final Content content;
+  final VoidCallback onTap;
+
+  const ContentItem({
+    super.key,
+    required this.content,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 3,
+              child: Container(
+                width: double.infinity,
+                color: _getContentColor(content.contentType),
+                child: Icon(
+                  _getContentIcon(content.contentType),
+                  size: 48,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      content.title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.storage,
+                          size: 12,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          content.formattedSize,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        if (content.duration != null) ...[
+                          const Spacer(),
+                          Icon(
+                            Icons.access_time,
+                            size: 12,
+                            color: Colors.grey[600],
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            content.formattedDuration,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getContentColor(ContentType type) {
+    switch (type) {
+      case ContentType.audio:
+        return Colors.blue;
+      case ContentType.video:
+        return Colors.red;
+      case ContentType.image:
+        return Colors.green;
+      case ContentType.document:
+        return Colors.orange;
+    }
+  }
+
+  IconData _getContentIcon(ContentType type) {
+    switch (type) {
+      case ContentType.audio:
+        return Icons.audiotrack;
+      case ContentType.video:
+        return Icons.videocam;
+      case ContentType.image:
+        return Icons.image;
+      case ContentType.document:
+        return Icons.description;
+    }
+  }
+}
+
+// lib/presentation/screens/content_detail_screen.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/i18n/i18n_service.dart';
+import '../../core/models/content.dart';
+import '../../core/services/transfer_service.dart';
+import '../widgets/mapping_modal.dart';
+
+class ContentDetailScreen extends ConsumerWidget {
+  final Content content;
+
+  const ContentDetailScreen({super.key, required this.content});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(content.title),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () => _showEditDialog(context),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete),
+            onPressed: () => _showDeleteDialog(context),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildPreview(context),
+            const SizedBox(height: 24),
+            _buildInfo(context),
+            const SizedBox(height: 24),
+            _buildActions(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreview(BuildContext context) {
+    return Card(
+      child: Container(
+        width: double.infinity,
+        height: 200,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: _getContentColor(content.contentType),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _getContentIcon(content.contentType),
+              size: 64,
+              color: Colors.white,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              content.title,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (content.contentType == ContentType.audio) ...[
+              const SizedBox(height: 16),
+              _buildMediaControls(context),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMediaControls(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          onPressed: () {
+            // TODO: Implement previous track
+          },
+          icon: const Icon(Icons.skip_previous, color: Colors.white),
+          iconSize: 32,
+        ),
+        IconButton(
+          onPressed: () {
+            // TODO: Implement play/pause
+          },
+          icon: const Icon(Icons.play_arrow, color: Colors.white),
+          iconSize: 48,
+        ),
+        IconButton(
+          onPressed: () {
+            // TODO: Implement next track
+          },
+          icon: const Icon(Icons.skip_next, color: Colors.white),
+          iconSize: 32,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfo(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'content.details'.t,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildInfoRow(
+              context,
+              'content.type'.t,
+              content.contentType.name.toUpperCase(),
+            ),
+            _buildInfoRow(
+              context,
+              'content.size'.t,
+              content.formattedSize,
+            ),
+            if (content.duration != null)
+              _buildInfoRow(
+                context,
+                'content.duration'.t,
+                content.formattedDuration,
+              ),
+            if (content.description != null)
+              _buildInfoRow(
+                context,
+                'content.description'.t,
+                content.description!,
+              ),
+            _buildInfoRow(
+              context,
+              'content.created_at'.t,
+              _formatDate(content.createdAt),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(BuildContext context, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActions(BuildContext context) {
+    final isMock = BleService.instance.isMockMode;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'content.actions'.t,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _showMappingModal(context),
+                icon: const Icon(Icons.credit_card),
+                label: Text('content.map_to_card'.t),
+              ),
+            ),
+            const SizedBox(width: 12),
+            if (!isMock)
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _startTransfer(context),
+                  icon: const Icon(Icons.upload),
+                  label: Text('content.transfer'.t),
+                ),
+              ),
+          ],
+        ),
+        if (isMock)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'content.transfer_disabled_mock'.t,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.orange[700],
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _showMappingModal(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => MappingModal(content: content),
+    );
+  }
+
+  void _startTransfer(BuildContext context) async {
+    try {
+      await TransferService.instance.startTransfer(
+        deviceId: 'mock_device_001',
+        content: content,
+        jobType: TransferJobType.upload,
+      );
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('content.transfer_started'.t),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('content.transfer_failed'.tr({'error': e.toString()})),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showEditDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('content.edit'.t),
+        content: Text('content.edit_message'.t),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('common.cancel'.t),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('common.save'.t),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('content.delete_confirm'.t),
+        content: Text('content.delete_message'.tr({'title': content.title})),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('common.cancel'.t),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context);
+              // TODO: Implement delete functionality
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('common.delete'.t),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getContentColor(ContentType type) {
+    switch (type) {
+      case ContentType.audio:
+        return Colors.blue;
+      case ContentType.video:
+        return Colors.red;
+      case ContentType.image:
+        return Colors.green;
+      case ContentType.document:
+        return Colors.orange;
+    }
+  }
+
+  IconData _getContentIcon(ContentType type) {
+    switch (type) {
+      case ContentType.audio:
+        return Icons.audiotrack;
+      case ContentType.video:
+        return Icons.videocam;
+      case ContentType.image:
+        return Icons.image;
+      case ContentType.document:
+        return Icons.description;
+    }
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+// lib/presentation/widgets/mapping_modal.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/i18n/i18n_service.dart';
+import '../../core/models/content.dart';
+import '../../core/models/card_mapping.dart';
+
+class MappingModal extends ConsumerStatefulWidget {
+  final Content content;
+
+  const MappingModal({super.key, required this.content});
+
+  @override
+  ConsumerState<MappingModal> createState() => _MappingModalState();
+}
+
+class _MappingModalState extends ConsumerState<MappingModal> {
+  String _cardId = '';
+  MappingType _mappingType = MappingType.single;
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'mapping.title'.t,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildContentInfo(),
+                  const SizedBox(height: 24),
+                  _buildCardIdInput(),
+                  const SizedBox(height: 24),
+                  _buildMappingTypeSelector(),
+                  const Spacer(),
+                  _buildActionButtons(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContentInfo() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.audiotrack, color: Colors.blue),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.content.title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${widget.content.contentType.name.toUpperCase()} • ${widget.content.formattedSize}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardIdInput() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'mapping.card_id'.t,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          decoration: InputDecoration(
+            hintText: 'mapping.card_id_hint'.t,
+            prefixIcon: const Icon(Icons.credit_card),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            filled: true,
+          ),
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'mapping.card_id_required'.t;
+            }
+            return null;
+          },
+          onSaved: (value) => _cardId = value ?? '',
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'mapping.card_id_description'.t,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.grey[600],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMappingTypeSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'mapping.type'.t,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        ...MappingType.values.map((type) => RadioListTile<MappingType>(
+          title: Text(_getMappingTypeName(type)),
+          subtitle: Text(_getMappingTypeDescription(type)),
+          value: type,
+          groupValue: _mappingType,
+          onChanged: (value) {
+            setState(() => _mappingType = value!);
+          },
+        )),
+      ],
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('common.cancel'.t),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: _saveMapping,
+            child: Text('mapping.save'.t),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getMappingTypeName(MappingType type) {
+    switch (type) {
+      case MappingType.single:
+        return 'mapping.single'.t;
+      case MappingType.playlist:
+        return 'mapping.playlist'.t;
+      case MappingType.random:
+        return 'mapping.random'.t;
+    }
+  }
+
+  String _getMappingTypeDescription(MappingType type) {
+    switch (type) {
+      case MappingType.single:
+        return 'mapping.single_desc'.t;
+      case MappingType.playlist:
+        return 'mapping.playlist_desc'.t;
+      case MappingType.random:
+        return 'mapping.random_desc'.t;
+    }
+  }
+
+  void _saveMapping() {
+    if (_formKey.currentState?.validate() ?? false) {
+      _formKey.currentState?.save();
+      
+      // TODO: Save mapping to database
+      final mapping = CardMapping(
+        deviceId: 'mock_device_001',
+        cardId: _cardId,
+        contentId: widget.content.contentId,
+        mappingType: _mappingType,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      Navigator.pop(context);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('mapping.saved'.t),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }
+  }
+}
+
+// assets/i18n/en.json
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "retry": "Retry",
+    "yes": "Yes",
+    "no": "No",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success"
+  },
+  "home": {
+    "title": "Home",
+    "quick_actions": "Quick Actions",
+    "recent_devices": "Recent Devices",
+    "add_device": "Add Device"
+  },
+  "scan": {
+    "title": "Scan Devices",
+    "instructions": "Make sure your BLE device is powered on and in pairing mode.",
+    "no_devices": "No devices found",
+    "no_devices_hint": "Make sure your devices are nearby and powered on.",
+    "scan_again": "Scan Again",
+    "use_mock_device": "Use Mock Device (Demo)",
+    "connected": "Connected to {{device}}",
+    "mock_connected": "Connected to mock device for demo",
+    "connection_failed": "Connection failed: {{error}}",
+    "error": "Scan failed: {{error}}"
+  },
+  "device": {
+    "connected": "Connected",
+    "offline": "Offline",
+    "battery": "Battery"
+  },
+  "content": {
+    "title": "Content Library",
+    "all": "All",
+    "audio": "Audio",
+    "video": "Video",
+    "image": "Images",
+    "document": "Documents",
+    "search_hint": "Search content...",
+    "empty_title": "No content yet",
+    "empty_subtitle": "Add your first audio, video, or image file to get started.",
+    "add_first": "Add Content",
+    "add_content": "Add Content",
+    "add_content_message": "Choose files from your device to add to the library.",
+    "choose_file": "Choose File",
+    "details": "Details",
+    "type": "Type",
+    "size": "Size",
+    "duration": "Duration",
+    "description": "Description",
+    "created_at": "Created",
+    "actions": "Actions",
+    "map_to_card": "Map to Card",
+    "transfer": "Transfer",
+    "transfer_disabled_mock": "Transfer disabled in mock mode (no real files)",
+    "transfer_started": "Transfer started",
+    "transfer_failed": "Transfer failed: {{error}}",
+    "edit": "Edit Content",
+    "edit_message": "Edit content information and metadata.",
+    "delete_confirm": "Delete Content",
+    "delete_message": "Are you sure you want to delete '{{title}}'? This action cannot be undone."
+  },
+  "mapping": {
+    "title": "Map to Card",
+    "card_id": "Card ID",
+    "card_id_hint": "Enter the RFID card ID",
+    "card_id_required": "Card ID is required",
+    "card_id_description": "Place the RFID card near the device to detect its ID automatically.",
+    "type": "Mapping Type",
+    "single": "Single Play",
+    "single_desc": "Play this content once when card is detected",
+    "playlist": "Playlist",
+    "playlist_desc": "Add to a playlist that plays multiple items",
+    "random": "Random",
+    "random_desc": "Play random content when card is detected",
+    "save": "Save Mapping",
+    "saved": "Card mapping saved successfully"
+  },
+  "transfer": {
+    "active_transfers": "Active Transfers",
+    "uploading": "Uploading",
+    "downloading": "Downloading",
+    "deleting": "Deleting",
+    "chunks_progress": "{{completed}} of {{total}} chunks",
+    "pause": "Pause",
+    "cancel": "Cancel",
+    "pause_not_implemented": "Pause feature will be added in future updates",
+    "cancel_confirm": "Cancel Transfer",
+    "cancel_message": "Are you sure you want to cancel this transfer? Progress will be lost.",
+    "cancelled": "Transfer cancelled"
+  },
+  "actions": {
+    "scan_devices": "Scan Devices",
+    "find_nearby": "Find nearby devices",
+    "add_content": "Add Content",
+    "upload_files": "Upload files",
+    "manage_playlists": "Playlists",
+    "organize_content": "Organize content",
+    "settings": "Settings",
+    "app_preferences": "App preferences"
+  },
+  "settings": {
+    "title": "Settings",
+    "connection": "Connection",
+    "storage": "Storage",
+    "about": "About",
+    "ble_status": "Bluetooth Status",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "disconnect": "Disconnect",
+    "mock_mode": "Mock Mode",
+    "mock_mode_desc": "Use mock device for testing",
+    "storage_usage": "Storage Usage",
+    "storage_desc": "Local cache and content storage",
+    "clear_cache": "Clear Cache",
+    "clear_cache_desc": "Delete cached files and data",
+    "clear_cache_confirm": "Clear Cache",
+    "clear_cache_confirm_desc": "This will delete all cached files. Continue?",
+    "cache_cleared": "Cache cleared successfully",
+    "clear": "Clear",
+    "version": "Version",
+    "about": "About",
+    "about_desc": "App information and credits",
+    "about_text": "BLE Content Manager allows you to manage and transfer multimedia content to Bluetooth Low Energy devices."
+  }
+}// lib/presentation/screens/home_screen.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/i18n/i18n_service.dart';
+import '../../core/ble/ble_service.dart';
+import '../widgets/device_card.dart';
+import '../widgets/quick_actions.dart';
+import '../widgets/transfer_status.dart';
+import 'device_scan_screen.dart';
+import 'content_library_screen.dart';
+import 'settings_screen.dart';
+
+class HomeScreen extends ConsumerStatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  int _selectedIndex = 0;
+
+  final List<Widget> _screens = [
+    const _HomeTab(),
+    const ContentLibraryScreen(),
+    const SettingsScreen(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _screens,
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) => setState(() => _selectedIndex = index),
+        items: [
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.home),
+            label: 'home.title'.t,
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.library_music),
+            label: 'content.title'.t,
+          ),
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.settings),
+            label: 'settings.title'.t,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeTab extends ConsumerWidget {
+  const _HomeTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('home.title'.t),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bluetooth_searching),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const DeviceScanScreen()),
+              );
+            },
+          ),
+        ],
+      ),
+      body: const SingleChildScrollView(
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            QuickActions(),
+            SizedBox(height: 24),
+            TransferStatus(),
+            SizedBox(height: 24),
+            _RecentDevicesSection(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentDevicesSection extends ConsumerWidget {
+  const _RecentDevicesSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'home.recent_devices'.t,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const DeviceScanScreen()),
+                );
+              },
+              icon: const Icon(Icons.add),
+              label: Text('home.add_device'.t),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        // TODO: Implement device list from repository
+        const DeviceCard(
+          deviceName: 'Mock BLE Device',
+          batteryLevel: 85,
+          isConnected: true,
+          lastSeen: 'Just now',
+        ),
+        const SizedBox(height: 12),
+        const DeviceCard(
+          deviceName: 'Audio Player 2',
+          batteryLevel: 65,
+          isConnected: false,
+          lastSeen: '2 hours ago',
+        ),
+      ],
+    );
+  }
+}
+
+// lib/presentation/screens/device_scan_screen.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+
+import '../../core/i18n/i18n_service.dart';
+import '../../core/ble/ble_service.dart';
+import '../widgets/device_scan_item.dart';
+
+class DeviceScanScreen extends ConsumerStatefulWidget {
+  const DeviceScanScreen({super.key});
+
+  @override
+  ConsumerState<DeviceScanScreen> createState() => _DeviceScanScreenState();
+}
+
+class _DeviceScanScreenState extends ConsumerState<DeviceScanScreen> {
+  List<BluetoothDevice> _discoveredDevices = [];
+  bool _isScanning = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _startScan();
+  }
+
+  Future<void> _startScan() async {
+    setState(() {
+      _isScanning = true;
+      _errorMessage = null;
+      _discoveredDevices.clear();
+    });
+
+    try {
+      final devices = await BleService.instance.scanForDevices();
+      setState(() {
+        _discoveredDevices = devices;
+        _isScanning = false;
+      });
+
+      // Add mock device for demo if no real devices found
+      if (devices.isEmpty && !BleService.instance.isMockMode) {
+        _addMockDevice();
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'scan.error'.tr({'error': e.toString()});
+        _isScanning = false;
+      });
+    }
+  }
+
+  void _addMockDevice() {
+    // This is for demo purposes when no real BLE devices are available
+    // In a real app, this would be removed or made configurable
+    setState(() {
+      // Mock device representation could be added here if needed
+      // For now, we'll just show the "use mock device" button in empty state
+    });
+  }
+
+  Future<void> _connectToDevice(BluetoothDevice device) async {
+    try {
+      await BleService.instance.connectToDevice(device);
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('scan.connected'.tr({'device': device.platformName})),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('scan.connection_failed'.tr({'error': e.toString()})),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('scan.title'.t),
+        actions: [
+          IconButton(
+            onPressed: _isScanning ? null : _startScan,
+            icon: _isScanning 
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (_isScanning)
+            const LinearProgressIndicator(),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: Theme.of(context).primaryColor,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'scan.instructions'.t,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: _buildDeviceList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeviceList() {
+    if (_errorMessage != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _errorMessage!,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _startScan,
+              child: Text('common.retry'.t),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_discoveredDevices.isEmpty && !_isScanning) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.bluetooth_disabled,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'scan.no_devices'.t,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'scan.no_devices_hint'.t,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _startScan,
+              icon: const Icon(Icons.refresh),
+              label: Text('scan.scan_again'.t),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () {
+                // Connect to mock device for demo
+                BleService.instance.enableMockMode();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('scan.mock_connected'.t),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              },
+              child: Text('scan.use_mock_device'.t),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: _discoveredDevices.length,
+      itemBuilder: (context, index) {
+        final device = _discoveredDevices[index];
+        return DeviceScanItem(
+          device: device,
+          onTap: () => _connectToDevice(device),
+        );
+      },
+    );
+  }
+}
+
+// lib/presentation/screens/content_library_screen.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/i18n/i18n_service.dart';
+import '../../core/models/content.dart';
+import '../widgets/content_grid.dart';
+import '../widgets/content_filter.dart';
+import 'content_detail_screen.dart';
+
+class ContentLibraryScreen extends ConsumerStatefulWidget {
+  const ContentLibraryScreen({super.key});
+
+  @override
+  ConsumerState<ContentLibraryScreen> createState() => _ContentLibraryScreenState();
+}
+
+class _ContentLibraryScreenState extends ConsumerState<ContentLibraryScreen> {
+  ContentType? _selectedFilter;
+  String _searchQuery = '';
+
+  final List<Content> _mockContent = [
+    Content(
+      contentId: 'content_1',
+      title: 'Sample Audio Track',
+      description: 'A sample audio file for testing',
+      filePath: '/mock/audio1.mp3',
+      fileSize: 1024 * 1024 * 3, // 3MB
+      duration: 180, // 3 minutes
+      contentType: ContentType.audio,
+      createdAt: DateTime.now().subtract(const Duration(days: 1)),
+      updatedAt: DateTime.now().subtract(const Duration(days: 1)),
+    ),
+    Content(
+      contentId: 'content_2',
+      title: 'Demo Video',
+      description: 'Sample video content',
+      filePath: '/mock/video1.mp4',
+      fileSize: 1024 * 1024 * 15, // 15MB
+      duration: 300, // 5 minutes
+      contentType: ContentType.video,
+      createdAt: DateTime.now().subtract(const Duration(hours: 5)),
+      updatedAt: DateTime.now().subtract(const Duration(hours: 5)),
+    ),
+    Content(
+      contentId: 'content_3',
+      title: 'Story Image',
+      description: 'Beautiful landscape photo',
+      filePath: '/mock/image1.jpg',
+      fileSize: 1024 * 512, // 512KB
+      contentType: ContentType.image,
+      createdAt: DateTime.now().subtract(const Duration(minutes: 30)),
+      updatedAt: DateTime.now().subtract(const Duration(minutes: 30)),
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredContent = _getFilteredContent();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('content.title'.t),
+        actions: [
+          IconButton(
+            onPressed: _showAddContentDialog,
+            icon: const Icon(Icons.add),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          ContentFilter(
+            selectedFilter: _selectedFilter,
+            onFilterChanged: (filter) {
+              setState(() => _selectedFilter = filter);
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'content.search_hint'.t,
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+              ),
+              onChanged: (value) {
+                setState(() => _searchQuery = value);
+              },
+            ),
+          ),
+          Expanded(
+            child: filteredContent.isEmpty
+                ? _buildEmptyState()
+                : ContentGrid(
+                    content: filteredContent,
+                    onContentTap: (content) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ContentDetailScreen(content: content),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Content> _getFilteredContent() {
+    var filtered = _mockContent.where((content) {
+      final matchesFilter = _selectedFilter == null || content.contentType == _selectedFilter;
+      final matchesSearch = _searchQuery.isEmpty || 
+          content.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          (content.description?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false);
+      return matchesFilter && matchesSearch;
+    }).toList();
+
+    filtered.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return filtered;
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.library_music_outlined,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'content.empty_title'.t,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'content.empty_subtitle'.t,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _showAddContentDialog,
+            icon: const Icon(Icons.add),
+            label: Text('content.add_first'.t),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddContentDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('content.add_content'.t),
+        content: Text('content.add_content_message'.t),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('common.cancel'.t),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: Implement file picker
+            },
+            child: Text('content.choose_file'.t),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// lib/presentation/screens/settings_screen.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/i18n/i18n_service.dart';
+import '../../core/app_config.dart';
+import '../../core/ble/ble_service.dart';
+
+class SettingsScreen extends ConsumerWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('settings.title'.t),
+      ),
+      body: ListView(
+        children: [
+          _buildSection(
+            context,
+            'settings.connection'.t,
+            [
+              _buildBleStatusTile(context),
+              _buildMockModeTile(context),
+              const Divider(),
+            ],
+          ),
+          _buildSection(
+            context,
+            'settings.storage'.t,
+            [
+              _buildStorageTile(context),
+              _buildClearCacheTile(context),
+              const Divider(),
+            ],
+          ),
+          _buildSection(
+            context,
+            'settings.about'.t,
+            [
+              _buildVersionTile(context),
+              _buildAboutTile(context),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSection(BuildContext context, String title, List<Widget> children) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Theme.of(context).primaryColor,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        ...children,
+      ],
+    );
+  }
+
+  Widget _buildBleStatusTile(BuildContext context) {
+    return StreamBuilder<BleConnectionState>(
+      stream: BleService.instance.connectionState,
+      builder: (context, snapshot) {
+        final isConnected = snapshot.data == BleConnectionState.connected;
+        return ListTile(
+          leading: Icon(
+            isConnected ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
+            color: isConnected ? Colors.green : Colors.grey,
+          ),
+          title: Text('settings.ble_status'.t),
+          subtitle: Text(isConnected ? 'settings.connected'.t : 'settings.disconnected'.t),
+          trailing: isConnected
+              ? ElevatedButton(
+                  onPressed: () => BleService.instance.disconnect(),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: Text('settings.disconnect'.t),
+                )
+              : null,
+        );
+      },
+    );
+  }
+
+  Widget _buildMockModeTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.developer_mode),
+      title: Text('settings.mock_mode'.t),
+      subtitle: Text('settings.mock_mode_desc'.t),
+      trailing: Switch(
+        value: BleService.instance.isMockMode,
+        onChanged: (value) {
+          if (value) {
+            BleService.instance.enableMockMode();
+          } else {
+            BleService.instance.disableMockMode();
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildStorageTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.storage),
+      title: Text('settings.storage_usage'.t),
+      subtitle: Text('settings.storage_desc'.t),
+      trailing: const Text('2.3 MB'), // TODO: Calculate actual storage usage
+    );
+  }
+
+  Widget _buildClearCacheTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.clear_all),
+      title: Text('settings.clear_cache'.t),
+      subtitle: Text('settings.clear_cache_desc'.t),
+      onTap: () => _showClearCacheDialog(context),
+    );
+  }
+
+  Widget _buildVersionTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.info),
+      title: Text('settings.version'.t),
+      subtitle: Text(AppConfig.appVersion),
+    );
+  }
+
+  Widget _buildAboutTile(BuildContext context) {
+    return ListTile(
+      leading: const Icon(Icons.help_outline),
+      title: Text('settings.about'.t),
+      subtitle: Text('settings.about_desc'.t),
+      onTap: () => _showAboutDialog(context),
+    );
+  }
+
+  void _showClearCacheDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('settings.clear_cache_confirm'.t),
+        content: Text('settings.clear_cache_confirm_desc'.t),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('common.cancel'.t),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // TODO: Implement cache clearing
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('settings.cache_cleared'.t)),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('settings.clear'.t),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAboutDialog(BuildContext context) {
+    showAboutDialog(
+      context: context,
+      applicationName: AppConfig.appName,
+      applicationVersion: AppConfig.appVersion,
+      applicationIcon: const Icon(Icons.bluetooth_audio, size: 48),
+      children: [
+        Text('settings.about_text'.t),
+      ],
+    );
+  }
+}
+
+// lib/presentation/widgets/device_card.dart
+import 'package:flutter/material.dart';
+
+import '../../core/i18n/i18n_service.dart';
+
+class DeviceCard extends StatelessWidget {
+  final String deviceName;
+  final int batteryLevel;
+  final bool isConnected;
+  final String lastSeen;
+  final VoidCallback? onTap;
+  final VoidCallback? onFavorite;
+  final bool isFavorite;
+
+  const DeviceCard({
+    super.key,
+    required this.deviceName,
+    required this.batteryLevel,
+    required this.isConnected,
+    required this.lastSeen,
+    this.onTap,
+    this.onFavorite,
+    this.isFavorite = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: isConnected 
+                      ? Colors.green.withOpacity(0.1)
+                      : Colors.grey.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Icon(
+                  isConnected ? Icons.bluetooth_connected : Icons.bluetooth,
+                  color: isConnected ? Colors.green : Colors.grey,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            deviceName,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (onFavorite != null)
+                          IconButton(
+                            onPressed: onFavorite,
+                            icon: Icon(
+                              isFavorite ? Icons.favorite : Icons.favorite_border,
+                              color: isFavorite ? Colors.red : Colors.grey,
+                            ),
+                            constraints: const BoxConstraints(),
+                            padding: EdgeInsets.zero,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.battery_std,
+                          size: 16,
+                          color: _getBatteryColor(batteryLevel),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$batteryLevel%',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(width: 16),
+                        Icon(
+                          Icons.access_time,
+                          size: 16,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            lastSeen,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isConnected 
+                      ? Colors.green.withOpacity(0.1)
+                      : Colors.grey.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  isConnected ? 'device.connected'.t : 'device.offline'.t,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: isConnected ? Colors.green[700] : Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getBatteryColor(int level) {
+    if (level > 60) return Colors.green;
+    if (level > 30) return Colors.orange;
+    return Colors.red;
+  }
+}
+
+// lib/presentation/widgets/quick_actions.dart
+import 'package:flutter/material.dart';
+
+import '../../core/i18n/i18n_service.dart';
+
+class QuickActions extends StatelessWidget {
+  const QuickActions({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'home.quick_actions'.t,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.5,
+          children: [
+            _QuickActionButton(
+              icon: Icons.bluetooth_searching,
+              title: 'actions.scan_devices'.t,
+              subtitle: 'actions.find_nearby'.t,
+              color: Colors.blue,
+              onTap: () {
+                // TODO: Navigate to scan screen
+              },
+            ),
+            _QuickActionButton(
+              icon: Icons.library_add,
+              title: 'actions.add_content'.t,
+              subtitle: 'actions.upload_files'.t,
+              color: Colors.green,
+              onTap: () {
+                // TODO: Show file picker
+              },
+            ),
+            _QuickActionButton(
+              icon: Icons.playlist_play,
+              title: 'actions.manage_playlists'.t,
+              subtitle: 'actions.organize_content'.t,
+              color: Colors.purple,
+              onTap: () {
+                // TODO: Navigate to playlist manager
+              },
+            ),
+            _QuickActionButton(
+              icon: Icons.settings,
+              title: 'actions.settings'.t,
+              subtitle: 'actions.app_preferences'.t,
+              color: Colors.orange,
+              onTap: () {
+                // TODO: Navigate to settings
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickActionButton extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickActionButton({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                icon,
+                color: color,
+                size: 32,
+              ),
+              const Spacer(),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.grey[600],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}// pubspec.yaml
+name: ble_content_app
+description: A Flutter BLE content management MVP application.
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # BLE
+  flutter_blue_plus: ^1.31.0
+  
+  # State Management
+  flutter_riverpod: ^2.4.9
+  
+  # Storage
+  sqflite: ^2.3.0
+  shared_preferences: ^2.2.2
+  
+  # UI
+  flutter_svg: ^2.0.9
+  cached_network_image: ^3.3.0
+  
+  # Utils
+  path_provider: ^2.1.1
+  crypto: ^3.0.3
+  intl: ^0.19.0
+  
+  # Permissions
+  permission_handler: ^11.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/i18n/
+    - assets/images/
+    - assets/icons/
+
+// lib/main.dart
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
+
+import 'core/app_config.dart';
+import 'core/database/database_helper.dart';
+import 'core/i18n/i18n_service.dart';
+import 'core/theme/app_theme.dart';
+import 'presentation/screens/home_screen.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize database
+  await DatabaseHelper.instance.database;
+  
+  // Initialize i18n
+  await I18nService.instance.initialize();
+  
+  // Set preferred orientations
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
+  
+  runApp(const ProviderScope(child: BLEContentApp()));
+}
+
+class BLEContentApp extends ConsumerWidget {
+  const BLEContentApp({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return MaterialApp(
+      title: 'BLE Content Manager',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.system,
+      home: const HomeScreen(),
+    );
+  }
+}
+
+// lib/core/app_config.dart
+class AppConfig {
+  static const String appName = 'BLE Content Manager';
+  static const String appVersion = '1.0.0';
+  
+  // BLE Configuration
+  static const String deviceServiceUuid = 'FFF0';
+  static const String deviceInfoCharUuid = 'FFF1';
+  static const String commandCharUuid = 'FFF2';
+  static const String dataCharUuid = 'FFF3';
+  static const String statusCharUuid = 'FFF4';
+  
+  // Transfer Configuration
+  static const int chunkSize = 512;
+  static const int maxRetries = 3;
+  static const int connectionTimeout = 10000; // ms
+  static const int commandTimeout = 5000; // ms
+  
+  // Cache Configuration
+  static const int maxCacheSize = 100 * 1024 * 1024; // 100MB
+  static const int maxCacheItems = 1000;
+}
+
+// lib/core/theme/app_theme.dart
+import 'package:flutter/material.dart';
+
+class AppTheme {
+  static const Color primaryBlue = Color(0xFF2196F3);
+  static const Color accentBlue = Color(0xFF1976D2);
+  static const Color successGreen = Color(0xFF4CAF50);
+  static const Color warningOrange = Color(0xFFFF9800);
+  static const Color errorRed = Color(0xFFF44336);
+  static const Color backgroundLight = Color(0xFFF5F5F5);
+  static const Color backgroundDark = Color(0xFF121212);
+  static const Color cardLight = Color(0xFFFFFFFF);
+  static const Color cardDark = Color(0xFF1E1E1E);
+
+  static ThemeData get lightTheme => ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.light,
+    primarySwatch: Colors.blue,
+    primaryColor: primaryBlue,
+    scaffoldBackgroundColor: backgroundLight,
+    cardColor: cardLight,
+    
+    appBarTheme: const AppBarTheme(
+      centerTitle: true,
+      elevation: 0,
+      backgroundColor: primaryBlue,
+      foregroundColor: Colors.white,
+      titleTextStyle: TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+      ),
+    ),
+    
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primaryBlue,
+        foregroundColor: Colors.white,
+        minimumSize: const Size(120, 48),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    ),
+    
+    cardTheme: CardTheme(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+    ),
+  );
+
+  static ThemeData get darkTheme => ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    primarySwatch: Colors.blue,
+    primaryColor: primaryBlue,
+    scaffoldBackgroundColor: backgroundDark,
+    cardColor: cardDark,
+    
+    appBarTheme: const AppBarTheme(
+      centerTitle: true,
+      elevation: 0,
+      backgroundColor: backgroundDark,
+      foregroundColor: Colors.white,
+      titleTextStyle: TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+      ),
+    ),
+    
+    elevatedButtonTheme: ElevatedButtonThemeData(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: primaryBlue,
+        foregroundColor: Colors.white,
+        minimumSize: const Size(120, 48),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    ),
+    
+    cardTheme: CardTheme(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+    ),
+  );
+}
+
+// lib/core/i18n/i18n_service.dart
+import 'dart:convert';
+import 'package:flutter/services.dart';
+
+class I18nService {
+  static final I18nService _instance = I18nService._internal();
+  static I18nService get instance => _instance;
+  I18nService._internal();
+
+  Map<String, dynamic> _translations = {};
+  String _currentLanguage = 'en';
+
+  Future<void> initialize([String language = 'en']) async {
+    _currentLanguage = language;
+    try {
+      final String jsonString = await rootBundle.loadString('assets/i18n/$language.json');
+      _translations = json.decode(jsonString);
+    } catch (e) {
+      // Fallback to English if language file not found
+      final String jsonString = await rootBundle.loadString('assets/i18n/en.json');
+      _translations = json.decode(jsonString);
+    }
+  }
+
+  String t(String key, [Map<String, dynamic>? args]) {
+    final keys = key.split('.');
+    dynamic value = _translations;
+    
+    for (String k in keys) {
+      if (value is Map<String, dynamic> && value.containsKey(k)) {
+        value = value[k];
+      } else {
+        return key; // Return key if translation not found
+      }
+    }
+    
+    if (value is String) {
+      String result = value;
+      args?.forEach((key, value) {
+        result = result.replaceAll('{{$key}}', value.toString());
+      });
+      return result;
+    }
+    
+    return key;
+  }
+}
+
+// Extension for easy access
+extension I18nExtension on String {
+  String get t => I18nService.instance.t(this);
+  String tr([Map<String, dynamic>? args]) => I18nService.instance.t(this, args);
+}
+
+// lib/core/database/database_helper.dart
+import 'dart:async';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+
+class DatabaseHelper {
+  static const String _databaseName = 'ble_content_app.db';
+  static const int _databaseVersion = 1;
+
+  static final DatabaseHelper _instance = DatabaseHelper._internal();
+  static DatabaseHelper get instance => _instance;
+  DatabaseHelper._internal();
+
+  static Database? _database;
+
+  Future<Database> get database async {
+    _database ??= await _initDatabase();
+    return _database!;
+  }
+
+  Future<Database> _initDatabase() async {
+    String path = join(await getDatabasesPath(), _databaseName);
+    return await openDatabase(
+      path,
+      version: _databaseVersion,
+      onCreate: _onCreate,
+    );
+  }
+
+  Future<void> _onCreate(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE devices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        mac_address TEXT NOT NULL,
+        firmware_version TEXT,
+        hardware_version TEXT,
+        storage_capacity INTEGER,
+        battery_level INTEGER,
+        last_seen INTEGER NOT NULL,
+        is_favorite INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE content (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        content_id TEXT UNIQUE NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT,
+        file_path TEXT NOT NULL,
+        file_size INTEGER NOT NULL,
+        duration INTEGER,
+        content_type TEXT NOT NULL,
+        thumbnail_path TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE card_mappings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        device_id TEXT NOT NULL,
+        card_id TEXT NOT NULL,
+        content_id TEXT,
+        mapping_type TEXT NOT NULL DEFAULT 'single',
+        playlist_order INTEGER,
+        is_active INTEGER DEFAULT 1,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (device_id) REFERENCES devices (device_id),
+        FOREIGN KEY (content_id) REFERENCES content (content_id),
+        UNIQUE(device_id, card_id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE transfer_jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_id TEXT UNIQUE NOT NULL,
+        device_id TEXT NOT NULL,
+        content_id TEXT NOT NULL,
+        job_type TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        progress REAL DEFAULT 0,
+        total_chunks INTEGER DEFAULT 0,
+        completed_chunks INTEGER DEFAULT 0,
+        error_message TEXT,
+        retry_count INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (device_id) REFERENCES devices (device_id),
+        FOREIGN KEY (content_id) REFERENCES content (content_id)
+      )
+    ''');
+
+    // Create indexes
+    await db.execute('CREATE INDEX idx_devices_device_id ON devices (device_id)');
+    await db.execute('CREATE INDEX idx_content_content_id ON content (content_id)');
+    await db.execute('CREATE INDEX idx_card_mappings_device_id ON card_mappings (device_id)');
+    await db.execute('CREATE INDEX idx_transfer_jobs_device_id ON transfer_jobs (device_id)');
+  }
+}
+
+// lib/core/models/device_info.dart
+class DeviceInfo {
+  final String deviceId;
+  final String name;
+  final String macAddress;
+  final String? firmwareVersion;
+  final String? hardwareVersion;
+  final int? storageCapacity;
+  final int? batteryLevel;
+  final DateTime lastSeen;
+  final bool isFavorite;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  DeviceInfo({
+    required this.deviceId,
+    required this.name,
+    required this.macAddress,
+    this.firmwareVersion,
+    this.hardwareVersion,
+    this.storageCapacity,
+    this.batteryLevel,
+    required this.lastSeen,
+    this.isFavorite = false,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory DeviceInfo.fromMap(Map<String, dynamic> map) {
+    return DeviceInfo(
+      deviceId: map['device_id'],
+      name: map['name'],
+      macAddress: map['mac_address'],
+      firmwareVersion: map['firmware_version'],
+      hardwareVersion: map['hardware_version'],
+      storageCapacity: map['storage_capacity'],
+      batteryLevel: map['battery_level'],
+      lastSeen: DateTime.fromMillisecondsSinceEpoch(map['last_seen']),
+      isFavorite: map['is_favorite'] == 1,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at']),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'device_id': deviceId,
+      'name': name,
+      'mac_address': macAddress,
+      'firmware_version': firmwareVersion,
+      'hardware_version': hardwareVersion,
+      'storage_capacity': storageCapacity,
+      'battery_level': batteryLevel,
+      'last_seen': lastSeen.millisecondsSinceEpoch,
+      'is_favorite': isFavorite ? 1 : 0,
+      'created_at': createdAt.millisecondsSinceEpoch,
+      'updated_at': updatedAt.millisecondsSinceEpoch,
+    };
+  }
+
+  DeviceInfo copyWith({
+    String? name,
+    String? firmwareVersion,
+    String? hardwareVersion,
+    int? storageCapacity,
+    int? batteryLevel,
+    DateTime? lastSeen,
+    bool? isFavorite,
+  }) {
+    return DeviceInfo(
+      deviceId: deviceId,
+      name: name ?? this.name,
+      macAddress: macAddress,
+      firmwareVersion: firmwareVersion ?? this.firmwareVersion,
+      hardwareVersion: hardwareVersion ?? this.hardwareVersion,
+      storageCapacity: storageCapacity ?? this.storageCapacity,
+      batteryLevel: batteryLevel ?? this.batteryLevel,
+      lastSeen: lastSeen ?? this.lastSeen,
+      isFavorite: isFavorite ?? this.isFavorite,
+      createdAt: createdAt,
+      updatedAt: DateTime.now(),
+    );
+  }
+}
+
+// lib/core/models/content.dart
+enum ContentType {
+  audio,
+  video,
+  image,
+  document,
+}
+
+class Content {
+  final String contentId;
+  final String title;
+  final String? description;
+  final String filePath;
+  final int fileSize;
+  final int? duration; // in seconds
+  final ContentType contentType;
+  final String? thumbnailPath;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  Content({
+    required this.contentId,
+    required this.title,
+    this.description,
+    required this.filePath,
+    required this.fileSize,
+    this.duration,
+    required this.contentType,
+    this.thumbnailPath,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory Content.fromMap(Map<String, dynamic> map) {
+    return Content(
+      contentId: map['content_id'],
+      title: map['title'],
+      description: map['description'],
+      filePath: map['file_path'],
+      fileSize: map['file_size'],
+      duration: map['duration'],
+      contentType: ContentType.values.firstWhere(
+        (e) => e.name == map['content_type'],
+        orElse: () => ContentType.document,
+      ),
+      thumbnailPath: map['thumbnail_path'],
+      createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at']),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'content_id': contentId,
+      'title': title,
+      'description': description,
+      'file_path': filePath,
+      'file_size': fileSize,
+      'duration': duration,
+      'content_type': contentType.name,
+      'thumbnail_path': thumbnailPath,
+      'created_at': createdAt.millisecondsSinceEpoch,
+      'updated_at': updatedAt.millisecondsSinceEpoch,
+    };
+  }
+
+  String get formattedSize {
+    if (fileSize < 1024) return '$fileSize B';
+    if (fileSize < 1024 * 1024) return '${(fileSize / 1024).toStringAsFixed(1)} KB';
+    return '${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  String get formattedDuration {
+    if (duration == null) return '';
+    final minutes = duration! ~/ 60;
+    final seconds = duration! % 60;
+    return '${minutes}:${seconds.toString().padLeft(2, '0')}';
+  }
+}
+
+// android/app/src/main/AndroidManifest.xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.ble_content_app">
+
+    <!-- Bluetooth permissions for Android 12+ (API 31+) -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" 
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    
+    <!-- Legacy Bluetooth permissions for Android 11 and below -->
+    <uses-permission android:name="android.permission.BLUETOOTH" 
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" 
+        android:maxSdkVersion="30" />
+    
+    <!-- Location permission for BLE scanning on Android 11 and below -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" 
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" 
+        android:maxSdkVersion="30" />
+    
+    <!-- File access permissions -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+        android:maxSdkVersion="28" />
+    
+    <!-- Internet permission for potential future features -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Declare that the app uses Bluetooth LE -->
+    <uses-feature
+        android:name="android.hardware.bluetooth_le"
+        android:required="true" />
+    <uses-feature
+        android:name="android.hardware.bluetooth"
+        android:required="true" />
+
+    <application
+        android:label="BLE Content Manager"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher">
+        
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            
+            <!-- Specifies an Android theme to apply to this Activity as soon as
+                 the Android process has started. This theme is visible to the user
+                 while the Flutter UI initializes. After that, this theme continues
+                 to determine the Window background behind the Flutter UI. -->
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+                
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        
+        <!-- Don't delete the meta-data below.
+             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+</manifest>
+
+// lib/core/services/permission_service.dart
+import 'package:permission_handler/permission_handler.dart';
+
+class PermissionService {
+  static final PermissionService _instance = PermissionService._internal();
+  static PermissionService get instance => _instance;
+  PermissionService._internal();
+
+  /// Check and request Bluetooth permissions based on Android version
+  Future<bool> requestBluetoothPermissions() async {
+    // For Android 12+ (API 31+), we need new Bluetooth permissions
+    if (await _isAndroid12OrHigher()) {
+      final permissions = [
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+      ];
+
+      Map<Permission, PermissionStatus> statuses = await permissions.request();
+      
+      // Check if all permissions are granted
+      return statuses.values.every((status) => status.isGranted);
+    } else {
+      // For Android 11 and below, we need location permissions for BLE scanning
+      final permissions = [
+        Permission.bluetooth,
+        Permission.location,
+        Permission.locationWhenInUse,
+      ];
+
+      Map<Permission, PermissionStatus> statuses = await permissions.request();
+      
+      // Check if all permissions are granted
+      return statuses.values.every((status) => status.isGranted);
+    }
+  }
+
+  /// Check if we have necessary permissions for BLE operations
+  Future<bool> hasBluetoothPermissions() async {
+    if (await _isAndroid12OrHigher()) {
+      return await Permission.bluetoothScan.isGranted &&
+             await Permission.bluetoothConnect.isGranted;
+    } else {
+      return await Permission.bluetooth.isGranted &&
+             await Permission.location.isGranted;
+    }
+  }
+
+  /// Request storage permissions for file operations
+  Future<bool> requestStoragePermissions() async {
+    if (await _isAndroid11OrHigher()) {
+      // Android 11+ uses scoped storage, but we might still need this
+      // for specific file operations
+      return await Permission.manageExternalStorage.request().isGranted;
+    } else {
+      final statuses = await [
+        Permission.storage,
+      ].request();
+      
+      return statuses.values.every((status) => status.isGranted);
+    }
+  }
+
+  /// Check storage permissions
+  Future<bool> hasStoragePermissions() async {
+    if (await _isAndroid11OrHigher()) {
+      return await Permission.manageExternalStorage.isGranted;
+    } else {
+      return await Permission.storage.isGranted;
+    }
+  }
+
+  /// Open app settings for manual permission management
+  Future<void> openAppSettings() async {
+    await openAppSettings();
+  }
+
+  // Helper methods
+  Future<bool> _isAndroid12OrHigher() async {
+    // This would typically check Android API level
+    // For Flutter, we can use device_info_plus package
+    // For now, return false as fallback
+    return false; // TODO: Implement actual Android version check
+  }
+
+  Future<bool> _isAndroid11OrHigher() async {
+    // Similarly for Android 11 check
+    return false; // TODO: Implement actual Android version check
+  }
+}
+
+// lib/core/ble/ble_service.dart - Updated scan method
+  Future<List<BluetoothDevice>> scanForDevices({Duration timeout = const Duration(seconds: 8)}) async {
+    if (_mockMode) {
+      await Future.delayed(const Duration(seconds: 2));
+      return [];
+    }
+
+    // Check and request permissions first
+    final hasPermissions = await PermissionService.instance.requestBluetoothPermissions();
+    if (!hasPermissions) {
+      throw Exception('Bluetooth permissions not granted. Please enable them in Settings.');
+    }
+
+    final devices = <BluetoothDevice>[];
+    
+    // Check availability
+    if (!await FlutterBluePlus.isAvailable) {
+      throw Exception('Bluetooth not available on this device');
+    }
+    
+    final state = await FlutterBluePlus.adapterState.first;
+    if (state != BluetoothAdapterState.on) {
+      throw Exception('Please turn on Bluetooth and try again');
+    }
+
+    final subscription = FlutterBluePlus.scanResults.listen((results) {
+      for (ScanResult result in results) {
+        if (!devices.contains(result.device)) {
+          // Filter for our target devices
+          final serviceUuids = result.advertisementData.serviceUuids;
+          if (serviceUuids.any((uuid) => uuid.toString().toUpperCase().contains('FFF0'))) {
+            devices.add(result.device);
+          }
+        }
+      }
+    });
+
+    await FlutterBluePlus.startScan(timeout: timeout);
+    // Wait for the given timeout duration
+    await Future.delayed(timeout);
+    await FlutterBluePlus.stopScan();
+    await subscription.cancel();
+    
+    return devices;
+  }
+
+// pubspec.yaml - Add permission_handler dependency
+name: ble_content_app
+description: A Flutter BLE content management MVP application.
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # BLE
+  flutter_blue_plus: ^1.31.0
+  
+  # State Management
+  flutter_riverpod: ^2.4.9
+  
+  # Storage
+  sqflite: ^2.3.0
+  shared_preferences: ^2.2.2
+  
+  # UI
+  flutter_svg: ^2.0.9
+  cached_network_image: ^3.3.0
+  
+  # Utils
+  path_provider: ^2.1.1
+  crypto: ^3.0.3
+  intl: ^0.19.0
+  
+  # Permissions
+  permission_handler: ^11.1.0
+  device_info_plus: ^9.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/i18n/
+    - assets/images/
+    - assets/icons/
+
+// lib/core/models/transfer_job.dart
+enum TransferJobType {
+  upload,
+  download,
+  delete,
+}
+
+enum TransferJobStatus {
+  pending,
+  running,
+  paused,
+  completed,
+  failed,
+  cancelled,
+}
+
+class TransferJob {
+  final String jobId;
+  final String deviceId;
+  final String contentId;
+  final TransferJobType jobType;
+  final TransferJobStatus status;
+  final double progress;
+  final int totalChunks;
+  final int completedChunks;
+  final String? errorMessage;
+  final int retryCount;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  TransferJob({
+    required this.jobId,
+    required this.deviceId,
+    required this.contentId,
+    required this.jobType,
+    this.status = TransferJobStatus.pending,
+    this.progress = 0.0,
+    this.totalChunks = 0,
+    this.completedChunks = 0,
+    this.errorMessage,
+    this.retryCount = 0,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory TransferJob.fromMap(Map<String, dynamic> map) {
+    return TransferJob(
+      jobId: map['job_id'],
+      deviceId: map['device_id'],
+      contentId: map['content_id'],
+      jobType: TransferJobType.values.firstWhere(
+        (e) => e.name == map['job_type'],
+        orElse: () => TransferJobType.upload,
+      ),
+      status: TransferJobStatus.values.firstWhere(
+        (e) => e.name == map['status'],
+        orElse: () => TransferJobStatus.pending,
+      ),
+      progress: map['progress']?.toDouble() ?? 0.0,
+      totalChunks: map['total_chunks'] ?? 0,
+      completedChunks: map['completed_chunks'] ?? 0,
+      errorMessage: map['error_message'],
+      retryCount: map['retry_count'] ?? 0,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(map['created_at']),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updated_at']),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'job_id': jobId,
+      'device_id': deviceId,
+      'content_id': contentId,
+      'job_type': jobType.name,
+      'status': status.name,
+      'progress': progress,
+      'total_chunks': totalChunks,
+      'completed_chunks': completedChunks,
+      'error_message': errorMessage,
+      'retry_count': retryCount,
+      'created_at': createdAt.millisecondsSinceEpoch,
+      'updated_at': updatedAt.millisecondsSinceEpoch,
+    };
+  }
+
+  TransferJob copyWith({
+    TransferJobStatus? status,
+    double? progress,
+    int? totalChunks,
+    int? completedChunks,
+    String? errorMessage,
+    int? retryCount,
+  }) {
+    return TransferJob(
+      jobId: jobId,
+      deviceId: deviceId,
+      contentId: contentId,
+      jobType: jobType,
+      status: status ?? this.status,
+      progress: progress ?? this.progress,
+      totalChunks: totalChunks ?? this.totalChunks,
+      completedChunks: completedChunks ?? this.completedChunks,
+      errorMessage: errorMessage ?? this.errorMessage,
+      retryCount: retryCount ?? this.retryCount,
+      createdAt: createdAt,
+      updatedAt: DateTime.now(),
+    );
+  }
+}
+
+// lib/core/ble/ble_service.dart
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:crypto/crypto.dart';
+
+import '../app_config.dart';
+import '../models/device_info.dart';
+
+enum BleConnectionState {
+  disconnected,
+  connecting,
+  connected,
+  error,
+}
+
+class BleCommand {
+  final String command;
+  final Map<String, dynamic>? params;
+
+  BleCommand(this.command, [this.params]);
+
+  Map<String, dynamic> toJson() {
+    return {
+      'cmd': command,
+      if (params != null) ...params!,
+    };
+  }
+}
+
+class BleResponse {
+  final String command;
+  final bool success;
+  final Map<String, dynamic>? data;
+  final String? error;
+
+  BleResponse(this.command, this.success, [this.data, this.error]);
+
+  factory BleResponse.fromJson(Map<String, dynamic> json) {
+    return BleResponse(
+      json['cmd'] ?? '',
+      json['success'] ?? false,
+      json['data'],
+      json['error'],
+    );
+  }
+}
+
+class BleService {
+  static final BleService _instance = BleService._internal();
+  static BleService get instance => _instance;
+  BleService._internal();
+
+  BluetoothDevice? _connectedDevice;
+  BluetoothCharacteristic? _deviceInfoChar;
+  BluetoothCharacteristic? _commandChar;
+  BluetoothCharacteristic? _dataChar;
+  BluetoothCharacteristic? _statusChar;
+
+  final _connectionStateController = StreamController<BleConnectionState>.broadcast();
+  final _deviceInfoController = StreamController<DeviceInfo>.broadcast();
+  final _statusController = StreamController<Map<String, dynamic>>.broadcast();
+  final _dataController = StreamController<Uint8List>.broadcast();
+
+  Stream<BleConnectionState> get connectionState => _connectionStateController.stream;
+  Stream<DeviceInfo> get deviceInfo => _deviceInfoController.stream;
+  Stream<Map<String, dynamic>> get status => _statusController.stream;
+  Stream<Uint8List> get data => _dataController.stream;
+
+  BleConnectionState _currentState = BleConnectionState.disconnected;
+  bool _mockMode = false;
+  Timer? _mockTimer;
+  
+  // Public getter for mock mode status
+  bool get isMockMode => _mockMode;
+
+  // Mock mode for testing without BLE device
+  void enableMockMode() {
+    _mockMode = true;
+    _startMockDevice();
+  }
+
+  void disableMockMode() {
+    _mockMode = false;
+    _mockTimer?.cancel();
+  }
+
+  void _startMockDevice() {
+    _connectionStateController.add(BleConnectionState.connected);
+    _currentState = BleConnectionState.connected;
+
+    // Mock device info
+    final mockDevice = DeviceInfo(
+      deviceId: 'mock_device_001',
+      name: 'Mock BLE Device',
+      macAddress: '00:11:22:33:44:55',
+      firmwareVersion: '1.0.0',
+      hardwareVersion: '2.1',
+      storageCapacity: 1024 * 1024 * 32, // 32MB
+      batteryLevel: 85,
+      lastSeen: DateTime.now(),
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    _deviceInfoController.add(mockDevice);
+
+    // Mock periodic status updates
+    _mockTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      _statusController.add({
+        'battery': (70 + (DateTime.now().second % 30)),
+        'storage_used': 1024 * 1024 * 8,
+        'playing': false,
+        'volume': 75,
+      });
+    });
+  }
+
+  Future<List<BluetoothDevice>> scanForDevices({Duration timeout = const Duration(seconds: 8)}) async {
+    if (_mockMode) {
+      await Future.delayed(const Duration(seconds: 2));
+      return [];
+    }
+
+    final devices = <BluetoothDevice>[];
+    
+    // Check availability
+    if (!await FlutterBluePlus.isAvailable) {
+      throw Exception('Bluetooth not available');
+    }
+    
+    final state = await FlutterBluePlus.adapterState.first;
+    if (state != BluetoothAdapterState.on) {
+      throw Exception('Bluetooth is not turned on');
+    }
+
+    final subscription = FlutterBluePlus.scanResults.listen((results) {
+      for (ScanResult result in results) {
+        if (!devices.contains(result.device)) {
+          // Filter for our target devices
+          final serviceUuids = result.advertisementData.serviceUuids;
+          if (serviceUuids.any((uuid) => uuid.toString().toUpperCase().contains('FFF0'))) {
+            devices.add(result.device);
+          }
+        }
+      }
+    });
+
+    await FlutterBluePlus.startScan(timeout: timeout);
+    // Wait for the given timeout duration
+    await Future.delayed(timeout);
+    await FlutterBluePlus.stopScan();
+    await subscription.cancel();
+    
+    return devices;
+  }
+
+  Future<void> connectToDevice(BluetoothDevice device) async {
+    if (_mockMode) {
+      _startMockDevice();
+      return;
+    }
+
+    try {
+      _connectionStateController.add(BleConnectionState.connecting);
+      _currentState = BleConnectionState.connecting;
+
+      await device.connect(timeout: Duration(milliseconds: AppConfig.connectionTimeout));
+      _connectedDevice = device;
+
+      // Discover services
+      List<BluetoothService> services = await device.discoverServices();
+      
+      BluetoothService? targetService;
+      for (BluetoothService service in services) {
+        if (service.uuid.toString().toUpperCase().contains('FFF0')) {
+          targetService = service;
+          break;
+        }
+      }
+
+      if (targetService == null) {
+        throw Exception('Target service not found');
+      }
+
+      // Get characteristics
+      for (BluetoothCharacteristic characteristic in targetService.characteristics) {
+        final uuidStr = characteristic.uuid.toString().toUpperCase();
+        
+        if (uuidStr.contains('FFF1')) {
+          _deviceInfoChar = characteristic;
+          // Enable notifications
+          await characteristic.setNotifyValue(true);
+          characteristic.value.listen((value) {
+            _handleDeviceInfoData(value);
+          });
+        } else if (uuidStr.contains('FFF2')) {
+          _commandChar = characteristic;
+        } else if (uuidStr.contains('FFF3')) {
+          _dataChar = characteristic;
+          await characteristic.setNotifyValue(true);
+          characteristic.value.listen((value) {
+            _dataController.add(Uint8List.fromList(value));
+          });
+        } else if (uuidStr.contains('FFF4')) {
+          _statusChar = characteristic;
+          await characteristic.setNotifyValue(true);
+          characteristic.value.listen((value) {
+            _handleStatusData(value);
+          });
+        }
+      }
+
+      _connectionStateController.add(BleConnectionState.connected);
+      _currentState = BleConnectionState.connected;
+
+      // Request device info
+      await sendCommand(BleCommand('get_device_info'));
+
+    } catch (e) {
+      _connectionStateController.add(BleConnectionState.error);
+      _currentState = BleConnectionState.error;
+      rethrow;
+    }
+  }
+
+  void _handleDeviceInfoData(List<int> data) {
+    try {
+      final jsonStr = utf8.decode(data);
+      final json = jsonDecode(jsonStr) as Map<String, dynamic>;
+      
+      final deviceInfo = DeviceInfo(
+        deviceId: json['device_id'] ?? 'unknown',
+        name: json['name'] ?? 'BLE Device',
+        macAddress: json['mac_address'] ?? '00:00:00:00:00:00',
+        firmwareVersion: json['firmware_version'],
+        hardwareVersion: json['hardware_version'],
+        storageCapacity: json['storage_capacity'],
+        batteryLevel: json['battery_level'],
+        lastSeen: DateTime.now(),
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      
+      _deviceInfoController.add(deviceInfo);
+    } catch (e) {
+      print('Error parsing device info: $e');
+    }
+  }
+
+  void _handleStatusData(List<int> data) {
+    try {
+      final jsonStr = utf8.decode(data);
+      final json = jsonDecode(jsonStr) as Map<String, dynamic>;
+      _statusController.add(json);
+    } catch (e) {
+      print('Error parsing status data: $e');
+    }
+  }
+
+  Future<BleResponse> sendCommand(BleCommand command, {Duration timeout = const Duration(seconds: 5)}) async {
+    if (_mockMode) {
+      return _handleMockCommand(command);
+    }
+
+    if (_commandChar == null || _currentState != BleConnectionState.connected) {
+      throw Exception('Device not connected');
+    }
+
+    final jsonStr = jsonEncode(command.toJson());
+    final data = utf8.encode(jsonStr);
+
+    await _commandChar!.write(data, withoutResponse: false);
+
+    // Wait for response (would need proper response handling in real implementation)
+    await Future.delayed(Duration(milliseconds: 100));
+    
+    return BleResponse(command.command, true);
+  }
+
+  BleResponse _handleMockCommand(BleCommand command) {
+    switch (command.command) {
+      case 'get_device_info':
+        return BleResponse(command.command, true, {
+          'device_id': 'mock_device_001',
+          'name': 'Mock BLE Device',
+          'firmware_version': '1.0.0',
+          'storage_capacity': 32 * 1024 * 1024,
+          'battery_level': 85,
+        });
+      
+      case 'play':
+        return BleResponse(command.command, true);
+      
+      case 'pause':
+        return BleResponse(command.command, true);
+      
+      case 'set_volume':
+        return BleResponse(command.command, true);
+      
+      case 'transfer_begin':
+        return BleResponse(command.command, true, {
+          'session_id': 'mock_session_${DateTime.now().millisecondsSinceEpoch}',
+          'chunk_size': AppConfig.chunkSize,
+        });
+      
+      default:
+        return BleResponse(command.command, true);
+    }
+  }
+
+  Future<void> disconnect() async {
+    if (_mockMode) {
+      _mockTimer?.cancel();
+      _connectionStateController.add(BleConnectionState.disconnected);
+      _currentState = BleConnectionState.disconnected;
+      return;
+    }
+
+    try {
+      await _connectedDevice?.disconnect();
+      _connectedDevice = null;
+      _deviceInfoChar = null;
+      _commandChar = null;
+      _dataChar = null;
+      _statusChar = null;
+      
+      _connectionStateController.add(BleConnectionState.disconnected);
+      _currentState = BleConnectionState.disconnected;
+    } catch (e) {
+      print('Error disconnecting: $e');
+    }
+  }
+
+  void dispose() {
+    _connectionStateController.close();
+    _deviceInfoController.close();
+    _statusController.close();
+    _dataController.close();
+    _mockTimer?.cancel();
+  }
+}
+
+// lib/core/services/transfer_service.dart
+import 'dart:async';
+import 'dart:typed_data';
+import 'dart:io';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
+
+import '../app_config.dart';
+import '../models/transfer_job.dart';
+import '../models/content.dart';
+import '../ble/ble_service.dart';
+
+class TransferService {
+  static final TransferService _instance = TransferService._internal();
+  static TransferService get instance => _instance;
+  TransferService._internal();
+
+  final Map<String, StreamController<TransferJob>> _jobControllers = {};
+  final Map<String, bool> _cancelledJobs = {};
+
+  Stream<TransferJob> getJobStream(String jobId) {
+    _jobControllers[jobId] ??= StreamController<TransferJob>.broadcast();
+    return _jobControllers[jobId]!.stream;
+  }
+
+  Future<String> startTransfer({
+    required String deviceId,
+    required Content content,
+    required TransferJobType jobType,
+  }) async {
+    final jobId = 'job_${DateTime.now().millisecondsSinceEpoch}';
+    
+    final job = TransferJob(
+      jobId: jobId,
+      deviceId: deviceId,
+      contentId: content.contentId,
+      jobType: jobType,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    _emitJobUpdate(job);
+
+    // Start transfer in background
+    _performTransfer(job, content);
+
+    return jobId;
+  }
+
+  void _emitJobUpdate(TransferJob job) {
+    _jobControllers[job.jobId] ??= StreamController<TransferJob>.broadcast();
+    _jobControllers[job.jobId]!.add(job);
+  }
+
+  Future<void> _performTransfer(TransferJob job, Content content) async {
+    try {
+      // Update job status to running
+      var updatedJob = job.copyWith(status: TransferJobStatus.running);
+      _emitJobUpdate(updatedJob);
+
+      if (job.jobType == TransferJobType.upload) {
+        await _performUpload(updatedJob, content);
+      } else if (job.jobType == TransferJobType.download) {
+        await _performDownload(updatedJob, content);
+      }
+    } catch (e) {
+      final errorJob = job.copyWith(
+        status: TransferJobStatus.failed,
+        errorMessage: e.toString(),
+      );
+      _emitJobUpdate(errorJob);
+    }
+  }
+
+  Future<void> _performUpload(TransferJob job, Content content) async {
+    final file = File(content.filePath);
+    if (!await file.exists()) {
+      throw Exception('File not found: ${content.filePath}');
+    }
+
+    final fileBytes = await file.readAsBytes();
+    final totalChunks = (fileBytes.length / AppConfig.chunkSize).ceil();
+    
+    // Calculate hash for integrity check
+    final hash = _calculateHash(fileBytes);
+
+    // Begin transfer session
+    final beginResponse = await BleService.instance.sendCommand(
+      BleCommand('transfer_begin', {
+        'content_id': content.contentId,
+        'file_size': fileBytes.length,
+        'chunk_count': totalChunks,
+        'hash': hash,
+        'content_type': content.contentType.name,
+      }),
+    );
+
+    if (!beginResponse.success) {
+      throw Exception('Failed to begin transfer: ${beginResponse.error}');
+    }
+
+    final sessionId = beginResponse.data?['session_id'] as String?;
+    if (sessionId == null) {
+      throw Exception('No session ID received');
+    }
+
+    var updatedJob = job.copyWith(totalChunks: totalChunks);
+    _emitJobUpdate(updatedJob);
+
+    // Send chunks
+    for (int i = 0; i < totalChunks; i++) {
+      if (_cancelledJobs[job.jobId] == true) {
+        throw Exception('Transfer cancelled');
+      }
+
+      final start = i * AppConfig.chunkSize;
+      final end = (start + AppConfig.chunkSize > fileBytes.length) 
+          ? fileBytes.length 
+          : start + AppConfig.chunkSize;
+      
+      final chunk = fileBytes.sublist(start, end);
+      
+      final chunkResponse = await BleService.instance.sendCommand(
+        BleCommand('transfer_chunk', {
+          'session_id': sessionId,
+          'chunk_index': i,
+          'data': base64Encode(chunk),
+        }),
+      );
+
+      if (!chunkResponse.success) {
+        throw Exception('Failed to send chunk $i: ${chunkResponse.error}');
+      }
+
+      final progress = (i + 1) / totalChunks;
+      updatedJob = updatedJob.copyWith(
+        progress: progress,
+        completedChunks: i + 1,
+      );
+      _emitJobUpdate(updatedJob);
+
+      // Small delay to prevent overwhelming the device
+      await Future.delayed(const Duration(milliseconds: 10));
+    }
+
+    // End transfer session
+    final endResponse = await BleService.instance.sendCommand(
+      BleCommand('transfer_end', {
+        'session_id': sessionId,
+      }),
+    );
+
+    if (!endResponse.success) {
+      throw Exception('Failed to end transfer: ${endResponse.error}');
+    }
+
+    final completedJob = updatedJob.copyWith(
+      status: TransferJobStatus.completed,
+      progress: 1.0,
+    );
+    _emitJobUpdate(completedJob);
+  }
+
+  Future<void> _performDownload(TransferJob job, Content content) async {
+    // TODO: Implement download logic
+    throw UnimplementedError('Download not implemented yet');
+  }
+
+  String _calculateHash(Uint8List data) {
+    // SHA-256 hash for integrity check
+    // Note: If device expects CRC32, implement proper CRC32 instead
+    final digest = sha256.convert(data);
+    return digest.toString();
+  }
+
+  void cancelJob(String jobId) {
+    _cancelledJobs[jobId] = true;
+    
+    final controller = _jobControllers[jobId];
+    if (controller != null) {
+      // Get current job state and mark as cancelled
+      // This is a simplified implementation
+      final cancelledJob = TransferJob(
+        jobId: jobId,
+        deviceId: '',
+        contentId: '',
+        jobType: TransferJobType.upload,
+        status: TransferJobStatus.cancelled,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      controller.add(cancelledJob);
+    }
+  }
+
+  Future<void> retryJob(TransferJob job, Content content) async {
+    if (job.retryCount >= AppConfig.maxRetries) {
+      throw Exception('Maximum retry count reached');
+    }
+
+    final retryJob = job.copyWith(
+      status: TransferJobStatus.pending,
+      retryCount: job.retryCount + 1,
+      errorMessage: null,
+    );
+
+    _performTransfer(retryJob, content);
+  }
+
+  void dispose() {
+    for (final controller in _jobControllers.values) {
+      controller.close();
+    }
+    _jobControllers.clear();
+    _cancelledJobs.clear();
+  }
+}
+
+// lib/data/repositories/device_repository.dart
+import '../core/database/database_helper.dart';
+import '../core/models/device_info.dart';
+
+class DeviceRepository {
+  static final DeviceRepository _instance = DeviceRepository._internal();
+  static DeviceRepository get instance => _instance;
+  DeviceRepository._internal();
+
+  Future<List<DeviceInfo>> getAllDevices() async {
+    final db = await DatabaseHelper.instance.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'devices',
+      orderBy: 'last_seen DESC',
+    );
+    return List.generate(maps.length, (i) => DeviceInfo.fromMap(maps[i]));
+  }
+
+  Future<List<DeviceInfo>> getFavoriteDevices() async {
+    final db = await DatabaseHelper.instance.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'devices',
+      where: 'is_favorite = ?',
+      whereArgs: [1],
+      orderBy: 'last_seen DESC',
+    );
+    return List.generate(maps.length, (i) => DeviceInfo.fromMap(maps[i]));
+  }
+
+  Future<DeviceInfo?> getDeviceById(String deviceId) async {
+    final db = await DatabaseHelper.instance.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'devices',
+      where: 'device_id = ?',
+      whereArgs: [deviceId],
+      limit: 1,
+    );
+    
+    if (maps.isEmpty) return null;
+    return DeviceInfo.fromMap(maps.first);
+  }
+
+  Future<void> insertDevice(DeviceInfo device) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.insert(
+      'devices',
+      device.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> updateDevice(DeviceInfo device) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.update(
+      'devices',
+      device.toMap(),
+      where: 'device_id = ?',
+      whereArgs: [device.deviceId],
+    );
+  }
+
+  Future<void> deleteDevice(String deviceId) async {
+    final db = await DatabaseHelper.instance.database;
+    await db.delete(
+      'devices',
+      where: 'device_id = ?',
+      whereArgs: [deviceId],
+    );
+  }
+
+  Future<void> toggleFavorite(String deviceId) async {
+    final device = await getDeviceById(deviceId);
+    if (device != null) {
+      final updatedDevice = device.copyWith(isFavorite: !device.isFavorite);
+      await updateDevice(updatedDevice);
+    }
+  }
+}
